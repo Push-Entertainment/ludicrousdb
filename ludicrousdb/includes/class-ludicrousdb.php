@@ -1614,9 +1614,18 @@ class LudicrousDB extends wpdb {
 		if ( $this->dbh_type_check( $dbh ) ) {
 			$mysql_errno = mysqli_errno( $dbh );
 
-			// Check if the connection is still alive by verifying no "server gone away" error.
-			if ( ! in_array( $mysql_errno, array( DB_SERVER_GONE_ERROR, DB_SERVER_LOST_ERROR ), true ) ) {
+			// Check if the connection is still alive.
+			// If there's no error, the connection is healthy.
+			if ( 0 === $mysql_errno ) {
 				$this->update_heartbeat( $dbh );
+				return true;
+			}
+
+			// If there's a "server gone away" error, the connection is dead and needs reconnection.
+			// Let execution continue to reconnection logic below.
+			if ( ! in_array( $mysql_errno, array( DB_SERVER_GONE_ERROR, DB_SERVER_LOST_ERROR ), true ) ) {
+				// Other errors (query errors, etc.) don't indicate a dead connection.
+				// Consider the connection alive but don't update heartbeat.
 				return true;
 			}
 		}
