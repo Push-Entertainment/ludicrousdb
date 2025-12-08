@@ -1614,8 +1614,16 @@ class LudicrousDB extends wpdb {
 		if ( $this->dbh_type_check( $dbh ) ) {
 			$mysql_errno = mysqli_errno( $dbh );
 
-			// Check if the connection is still alive.
-			// If there's no error, the connection is healthy.
+			/*
+			 * Check connection health based on the last MySQL error code.
+			 * Unlike mysqli_ping() which actively tests the connection, we check
+			 * the error state from the last operation:
+			 *
+			 * - errno 0: No error, connection is healthy
+			 * - errno 2006 (DB_SERVER_GONE_ERROR): Server has gone away, reconnect needed
+			 * - errno 4031 (DB_SERVER_LOST_ERROR): Connection was lost, reconnect needed
+			 * - Other errno: Query/operation error, but connection is still alive
+			 */
 			if ( 0 === $mysql_errno ) {
 				$this->update_heartbeat( $dbh );
 				return true;
