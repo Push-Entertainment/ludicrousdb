@@ -496,12 +496,16 @@ class LudicrousDB extends wpdb {
 		foreach ( $class_var_keys as $var ) {
 
 			// Check if old var is in $args
+			// $renamed_vars has old names as keys and new names as values
+			// So we need to search for $var in the values to find its old name
+			$old_name = array_search( $var, self::$renamed_vars, true );
+
 			if (
-				isset( self::$renamed_vars[ $var ] )
+				false !== $old_name
 				&&
-				isset( $args[ self::$renamed_vars[ $var ] ] )
+				isset( $args[ $old_name ] )
 			) {
-				$this->{$var} = $args[ self::$renamed_vars[ $var ] ];
+				$this->{$var} = $args[ $old_name ];
 			}
 
 			// Check if current var is in $args
