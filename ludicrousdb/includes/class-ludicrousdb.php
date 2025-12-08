@@ -285,6 +285,41 @@ class LudicrousDB extends wpdb {
 	private $lag_threshold = null;
 
 	/**
+	 * The current database handle name.
+	 *
+	 * @var string|null Default null.
+	 */
+	private $dbhname = null;
+
+	/**
+	 * The current dataset being queried.
+	 *
+	 * @var string|null Default null.
+	 */
+	private $dataset = null;
+
+	/**
+	 * The current host being connected to.
+	 *
+	 * @var string|null Default null.
+	 */
+	private $current_host = null;
+
+	/**
+	 * The last database connection information.
+	 *
+	 * @var array|null Default null.
+	 */
+	private $last_connection = null;
+
+	/**
+	 * The cache key for lag information.
+	 *
+	 * @var string|null Default null.
+	 */
+	private $lag_cache_key = null;
+
+	/**
 	 * Array of renamed class variables.
 	 *
 	 * @since 5.2.0
@@ -748,6 +783,8 @@ class LudicrousDB extends wpdb {
 
 		if ( empty( $dataset ) ) {
 			return $this->bail( "Unable to determine which dataset to query. ({$this->table})" );
+		} else {
+			$this->dataset = $dataset;
 		}
 
 		$this->run_callbacks( 'dataset_found', $dataset );
@@ -830,11 +867,11 @@ class LudicrousDB extends wpdb {
 		}
 
 		if ( ! empty( $use_primary ) ) {
-			$dbhname   = $dataset . '__w';
-			$operation = 'write';
+			$this->dbhname = $dbhname = $dataset . '__w';
+			$operation     = 'write';
 		} else {
-			$dbhname   = $dataset . '__r';
-			$operation = 'read';
+			$this->dbhname = $dbhname = $dataset . '__r';
+			$operation     = 'read';
 		}
 
 		// Try to reuse an existing connection
@@ -889,6 +926,8 @@ class LudicrousDB extends wpdb {
 				$name = $this->used_servers[ $dbhname ]['name'];
 			}
 
+			$this->current_host = $this->dbh2host[ $dbhname ];
+
 			// Keep this connection at the top of the stack to prevent
 			// disconnecting from frequently-used connections
 			$key = array_search( $dbhname, $this->open_connections, true );
@@ -898,6 +937,7 @@ class LudicrousDB extends wpdb {
 			}
 
 			$this->last_used_server = $this->used_servers[ $dbhname ];
+			$this->last_connection  = compact( 'dbhname', 'name' );
 
 			// Check if the connection is still alive
 			if (
@@ -1019,7 +1059,8 @@ class LudicrousDB extends wpdb {
 				// Format the cache key using the extracted host and port
 				$host_and_port = $this->tcp_get_cache_key( $host, $port );
 
-				// Set the lag threshold
+				// Can be used by the lag callbacks
+				$this->lag_cache_key = $host_and_port;
 				$this->lag_threshold = isset( $lag_threshold )
 					? $lag_threshold
 					: $this->database_defaults['lag_threshold'];
@@ -1121,13 +1162,15 @@ class LudicrousDB extends wpdb {
 						$this->set_sql_mode( array(), $this->dbhs[ $dbhname ] );
 
 						if ( $this->select( $name, $this->dbhs[ $dbhname ] ) ) {
+							$this->current_host         = $host_and_port;
 							$this->dbh2host[ $dbhname ] = $host_and_port;
 
 							// Define these to avoid undefined variable notices
 							$queries = isset( $queries ) ? $queries : 1; // phpcs:ignore VariableAnalysis.CodeAnalysis.VariableAnalysis.UndefinedVariable
 							$lag     = isset( $this->lag ) ? $this->lag : 0;
 
-							$this->db_connections[]   = compact( 'dbhname', 'host', 'port', 'user', 'name', 'tcp', 'elapsed', 'success', 'queries', 'lag' );
+							$this->last_connection    = compact( 'dbhname', 'host', 'port', 'user', 'name', 'tcp', 'elapsed', 'success', 'queries', 'lag' );
+							$this->db_connections[]   = $this->last_connection;
 							$this->open_connections[] = $dbhname;
 							$success                  = true;
 
@@ -1137,7 +1180,8 @@ class LudicrousDB extends wpdb {
 				}
 
 				$success                = false;
-				$this->db_connections[] = compact( 'dbhname', 'host', 'port', 'user', 'name', 'tcp', 'elapsed', 'success' );
+				$this->last_connection  = compact( 'dbhname', 'host', 'port', 'user', 'name', 'tcp', 'elapsed', 'success' );
+				$this->db_connections[] = $this->last_connection;
 
 				if ( $this->dbh_type_check( $this->dbhs[ $dbhname ] ) ) {
 					$error = mysqli_error( $this->dbhs[ $dbhname ] );
