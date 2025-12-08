@@ -1269,7 +1269,7 @@ class LudicrousDB extends wpdb {
 	 * @return bool|mysqli|resource
 	 */
 	protected function single_db_connect( $dbhname, $host, $user, $password ) {
-		$tcp_cache_key = $host;
+		$tcp_cache_key  = $host;
 		$this->is_mysql = true;
 
 		// Check client flags
@@ -1610,14 +1610,15 @@ class LudicrousDB extends wpdb {
 	public function check_connection( $die_on_disconnect = true, $dbh_or_table = false, $query = '' ) {
 		$dbh = $this->get_db_object( $dbh_or_table );
 
-		// Return true if ping is successful. This is the most common case.
-		if (
-			$this->dbh_type_check( $dbh )
-			&&
-			mysqli_ping( $dbh )
-		) {
-			$this->update_heartbeat( $dbh );
-			return true;
+		// Return true if connection is alive. This is the most common case.
+		if ( $this->dbh_type_check( $dbh ) ) {
+			$mysql_errno = mysqli_errno( $dbh );
+
+			// Check if the connection is still alive by verifying no "server gone away" error.
+			if ( ! in_array( $mysql_errno, array( 2006, 4031 ), true ) ) {
+				$this->update_heartbeat( $dbh );
+				return true;
+			}
 		}
 
 		// Default to false
@@ -2416,7 +2417,7 @@ class LudicrousDB extends wpdb {
 		if (
 			! empty( $this->dbhname_heartbeats[ $dbhname ]['last_errno'] )
 			&&
-			( DB_SERVER_GONE_ERROR === $this->dbhname_heartbeats[ $dbhname ]['last_errno'] )
+			in_array( $this->dbhname_heartbeats[ $dbhname ]['last_errno'], array( 2006, 4031 ), true )
 		) {
 
 			// Also clear the last error
