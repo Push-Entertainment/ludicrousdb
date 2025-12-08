@@ -1269,7 +1269,7 @@ class LudicrousDB extends wpdb {
 	 * @return bool|mysqli|resource
 	 */
 	protected function single_db_connect( $dbhname, $host, $user, $password ) {
-		$tcp_cache_key = $host;
+		$tcp_cache_key  = $host;
 		$this->is_mysql = true;
 
 		// Check client flags
@@ -1610,14 +1610,36 @@ class LudicrousDB extends wpdb {
 	public function check_connection( $die_on_disconnect = true, $dbh_or_table = false, $query = '' ) {
 		$dbh = $this->get_db_object( $dbh_or_table );
 
-		// Return true if ping is successful. This is the most common case.
-		if (
-			$this->dbh_type_check( $dbh )
-			&&
-			mysqli_query( $dbh, 'DO 1' ) !== false
-		) {
-			$this->update_heartbeat( $dbh );
-			return true;
+		// Return true if connection is alive. This is the most common case.
+		if ( $this->dbh_type_check( $dbh ) ) {
+			$mysql_errno = mysqli_errno( $dbh );
+
+			/*
+			 * Check connection health based on the last MySQL error code.
+			 * Unlike mysqli_ping() which actively tests the connection, we check
+			 * the error state from the last operation:
+			 *
+			 * - errno 0: No error, connection is healthy (or no operations performed yet)
+			 * - errno 2006 (DB_SERVER_GONE_ERROR): Server has gone away, reconnect needed
+			 * - errno 4031 (DB_SERVER_LOST_ERROR): Connection was lost, reconnect needed
+			 * - Other errno: Query/operation error, but connection is still alive
+			 *
+			 * Note: This passive approach means a stale connection with no operations
+			 * may be considered alive until the next query reveals otherwise. This is
+			 * an acceptable trade-off to avoid the deprecated mysqli_ping() function.
+			 */
+			if ( 0 === $mysql_errno ) {
+				$this->update_heartbeat( $dbh );
+				return true;
+			}
+
+			// If there's a "server gone away" error, the connection is dead and needs reconnection.
+			// Let execution continue to reconnection logic below.
+			if ( ! in_array( $mysql_errno, array( DB_SERVER_GONE_ERROR, DB_SERVER_LOST_ERROR ), true ) ) {
+				// Other errors (query errors, etc.) don't indicate a dead connection.
+				// Consider the connection alive but don't update heartbeat.
+				return true;
+			}
 		}
 
 		// Default to false
@@ -1822,7 +1844,7 @@ class LudicrousDB extends wpdb {
 			}
 
 			// retry the server and all other servers if the connection went away
-			if ( in_array( $mysql_errno, array( 2006, 4031 ), true ) ) {
+			if ( in_array( $mysql_errno, array( DB_SERVER_GONE_ERROR, DB_SERVER_LOST_ERROR ), true ) ) {
 				return $this->query( $query );
 			}
 
@@ -2398,7 +2420,11 @@ class LudicrousDB extends wpdb {
 		if (
 			empty( $this->check_dbh_heartbeats )
 			&&
-			in_array( mysqli_errno( $this->dbhs[ $dbhname ] ), array( 2006, 4031 ), true )
+			isset( $this->dbhs[ $dbhname ] )
+			&&
+			$this->dbh_type_check( $this->dbhs[ $dbhname ] )
+			&&
+			in_array( mysqli_errno( $this->dbhs[ $dbhname ] ), array( DB_SERVER_GONE_ERROR, DB_SERVER_LOST_ERROR ), true )
 		) {
 			return true;
 		}
@@ -2416,7 +2442,7 @@ class LudicrousDB extends wpdb {
 		if (
 			! empty( $this->dbhname_heartbeats[ $dbhname ]['last_errno'] )
 			&&
-			( in_array( $this->dbhname_heartbeats[ $dbhname ]['last_errno'], array( 2006, 4031 ), true ) )
+			in_array( $this->dbhname_heartbeats[ $dbhname ]['last_errno'], array( DB_SERVER_GONE_ERROR, DB_SERVER_LOST_ERROR ), true )
 		) {
 
 			// Also clear the last error
