@@ -1615,7 +1615,7 @@ class LudicrousDB extends wpdb {
 			$mysql_errno = mysqli_errno( $dbh );
 
 			// Check if the connection is still alive by verifying no "server gone away" error.
-			if ( ! in_array( $mysql_errno, array( 2006, 4031 ), true ) ) {
+			if ( ! in_array( $mysql_errno, array( DB_SERVER_GONE_ERROR, DB_SERVER_LOST_ERROR ), true ) ) {
 				$this->update_heartbeat( $dbh );
 				return true;
 			}
@@ -1823,7 +1823,7 @@ class LudicrousDB extends wpdb {
 			}
 
 			// retry the server and all other servers if the connection went away
-			if ( in_array( $mysql_errno, array( 2006, 4031 ), true ) ) {
+			if ( in_array( $mysql_errno, array( DB_SERVER_GONE_ERROR, DB_SERVER_LOST_ERROR ), true ) ) {
 				return $this->query( $query );
 			}
 
@@ -2399,7 +2399,11 @@ class LudicrousDB extends wpdb {
 		if (
 			empty( $this->check_dbh_heartbeats )
 			&&
-			in_array( mysqli_errno( $this->dbhs[ $dbhname ] ), array( 2006, 4031 ), true )
+			isset( $this->dbhs[ $dbhname ] )
+			&&
+			$this->dbh_type_check( $this->dbhs[ $dbhname ] )
+			&&
+			in_array( mysqli_errno( $this->dbhs[ $dbhname ] ), array( DB_SERVER_GONE_ERROR, DB_SERVER_LOST_ERROR ), true )
 		) {
 			return true;
 		}
@@ -2417,7 +2421,7 @@ class LudicrousDB extends wpdb {
 		if (
 			! empty( $this->dbhname_heartbeats[ $dbhname ]['last_errno'] )
 			&&
-			in_array( $this->dbhname_heartbeats[ $dbhname ]['last_errno'], array( 2006, 4031 ), true )
+			in_array( $this->dbhname_heartbeats[ $dbhname ]['last_errno'], array( DB_SERVER_GONE_ERROR, DB_SERVER_LOST_ERROR ), true )
 		) {
 
 			// Also clear the last error
