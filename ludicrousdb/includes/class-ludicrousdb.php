@@ -1816,9 +1816,9 @@ class LudicrousDB extends wpdb {
 			&&
 			( $this->last_found_rows_result instanceof mysqli_result )
 		) {
-			$this->result = $this->last_found_rows_result;
-			$elapsed      = 0;
-
+			$this->result                 = $this->last_found_rows_result;
+			$this->last_found_rows_result = null;
+			$elapsed                      = 0;
 		} else {
 			$this->dbh = $this->db_connect( $query );
 
@@ -1848,7 +1848,7 @@ class LudicrousDB extends wpdb {
 				return $this->query( $query );
 			}
 
-			if ( preg_match( '/^\s*SELECT\s+([A-Z_]+\s+)*SQL_CALC_FOUND_ROWS\s/i', $query ) ) {
+			if ( preg_match( '/^\s*SELECT\s+([A-Z_]+\s+)*SQL_CALC_FOUND_ROWS\s/i', $query ) && false !== $this->result ) {
 				if ( false === strpos( $query, 'NO_SELECT_FOUND_ROWS' ) ) {
 					$this->timer_start();
 					$this->last_found_rows_result = $this->_do_query( 'SELECT FOUND_ROWS()', $this->dbh );
