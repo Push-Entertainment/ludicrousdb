@@ -492,16 +492,20 @@ class LudicrousDB extends wpdb {
 			$this->database_defaults['lag_threshold'] = $args['default_lag_threshold'];
 		}
 
+		// Create reverse lookup for renamed vars (new name => old name) for performance
+		// $renamed_vars has old names as keys and new names as values
+		$new_to_old = array_flip( self::$renamed_vars );
+
 		// Loop through class vars and override if set in $args
 		foreach ( $class_var_keys as $var ) {
 
 			// Check if old var is in $args
 			if (
-				isset( self::$renamed_vars[ $var ] )
+				isset( $new_to_old[ $var ] )
 				&&
-				isset( $args[ self::$renamed_vars[ $var ] ] )
+				isset( $args[ $new_to_old[ $var ] ] )
 			) {
-				$this->{$var} = $args[ self::$renamed_vars[ $var ] ];
+				$this->{$var} = $args[ $new_to_old[ $var ] ];
 			}
 
 			// Check if current var is in $args
